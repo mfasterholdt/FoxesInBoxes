@@ -4,13 +4,14 @@ using System.Collections;
 public class Tile : MonoBehaviour {
 
 	public GameObject visuals;
+	public float z;
 	
-	void Start () {
+	public enum Type{fox, box, environemnt};
+	public Type type;
 	
-	}
-	
-	// Update is called once per frame
-	void Update () {
-	
+	public void Setup(Vector3 pos)
+	{
+		pos.z = z;
+		this.transform.position = pos;
 	}
 }
