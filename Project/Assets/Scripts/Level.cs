@@ -1,26 +1,33 @@
 using UnityEngine;
 using System.Collections;
 using System.IO;
+using System.Collections.Generic;
 
 public class Level : MonoBehaviour 
 {	
 	public GameObject[] tileList;
 	public string fileName = "level01.txt";
 
-	Tile[,] tiles;
-	string[,] levelData;	
-	int levelWidth;
-	int levelHeight;
+	public Tile[,] tiles;
+	Fox[] foxes;
+	Box[] boxes;
 	
-	static int tileSize = 1;
+	string[,] levelData;	
+	public static int levelWidth;
+	public static int levelHeight;
 	
 	float widthOffset;
 	float heightOffset;
 	
+	public static int tileSize = 1;
+	public static float gravity = -0.1f;
+	
+	public Tile dragging;
+	public GridPos lastDragPos;
+	
 	void Start ()
 	{		
-		LoadLevel(fileName);
-		
+		LoadLevel(fileName);		
 		CreateLevel();
 	}
 	
@@ -63,17 +70,18 @@ public class Level : MonoBehaviour
 			{
 				int index = int.Parse(levelData[x,y]);
 				
-				Vector2 pos = new Vector2(x, y);
-				CreateTile(index, pos);
+				CreateTile(index, x, y);
 			}
 	    }
+		
+		boxes = FindObjectsOfType(typeof(Box)) as Box[];
+		foxes = FindObjectsOfType(typeof(Fox)) as Fox[];
 	}
 	
-	void CreateTile(int index, Vector3 p)
+	void CreateTile(int index, int x, int y)
 	{
 		//Create tile
-		
-		Vector3 pos = new Vector3(p.x * tileSize, p.y * -tileSize, 0);
+		Vector3 pos = new Vector3(x * tileSize, y * -tileSize, 0);
 		pos.x += widthOffset;
 		pos.y += heightOffset;
 		
@@ -81,17 +89,96 @@ public class Level : MonoBehaviour
 		Tile newTile = newObj.GetComponent<Tile>();
 		
 		newObj.transform.parent = this.transform;
-		newTile.Setup(pos);	
+		newTile.Setup(pos, x, y, this);	
 		
 		
-		if(newTile.type == Tile.Type.environemnt)
+		if(newTile.type != Tile.Type.background)
 		{
-			
+			//Create air behind boxes and foxes
+			if(newTile.type == Tile.Type.box || newTile.type == Tile.Type.fox)
+			{
+				CreateTile(0, x, y);	
+			}
+		
+			//Add to level
+			tiles[x, y] = newTile;
+		}
+	}
+	
+	void Update()
+	{
+		for(int i = 0; i < boxes.Length; i++)
+		{
+			Box b = boxes[i];
+			b.TileUpdate();
+		}
+		
+		HandleMouse();
+	}
+	
+	public bool GetTile(int x, int y)
+	{
+		//Check to fall
+		Tile t = tiles[x, y];
+		
+		if(t == null)
+		{
+			return false;
 		}
 		else
 		{
-			//Create air behind object
-			CreateTile(0, p);
+			return true;
+		}
+	}
+	
+	void HandleMouse()
+	{	
+		bool mouseDown = Input.GetMouseButtonDown(0);
+		
+		if(dragging != null)
+		{
+			//Move Object
+			Vector3 pos = Camera.mainCamera.ScreenToWorldPoint(Input.mousePosition);			
+			pos.x = Mathf.Round(pos.x / tileSize);
+			pos.y = Mathf.Round(pos.y / tileSize);
+			pos.z = 0; 	
+			
+			GridPos currentPos = new GridPos( (int) pos.x + (levelWidth / 2), ((int)pos.y - (levelHeight / 2)) * -1);
+			Tile tile = tiles[currentPos.x, currentPos.y];	
+			
+			//currentPos.x
+			if(tile == null || tile.type == Tile.Type.background)
+			{
+				pos.x = currentPos.x - (levelWidth / 2);
+				pos.y = (currentPos.y - (levelHeight / 2)) * -1;
+				
+				lastDragPos = currentPos;
+				dragging.gameObject.transform.position = pos;
+			}			
+
+			//Drop object
+			bool mouseUp = Input.GetMouseButtonUp(0);						
+			
+			if(mouseUp)	
+			{
+				dragging.Drop(lastDragPos);
+			}
+		}
+		else
+		{
+			//Pick up object
+			if(mouseDown)
+			{	
+				RaycastHit hit = new RaycastHit();
+				Ray ray = Camera.mainCamera.ScreenPointToRay(Input.mousePosition);
+				
+				if (Physics.Raycast (ray, out hit))
+				{  
+					Tile tile = hit.collider.transform.parent.GetComponent<Tile>();
+					
+					if (tile) tile.Drag();
+				}
+			}
 		}
 	}
 }
